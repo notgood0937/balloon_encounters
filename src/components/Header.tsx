@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import AlertManager from "./AlertManager";
 import { useI18n } from "@/i18n";
 
+import Link from "next/link";
 const WalletButton = dynamic(() => import("./WalletButton"), { ssr: false });
 import type { AlertConfig, AlertHistoryEntry } from "@/hooks/useAlerts";
 import type { ProcessedMarket } from "@/types";
@@ -121,15 +122,28 @@ export default function Header({
           </span>
         </div>
 
-        <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] ml-1">
-          <span>
-            <strong className="text-[var(--text-secondary)]">{marketCount}</strong> {t("header.mapped")}
-          </span>
-          <span className="text-[var(--border)]">|</span>
-          <span>
-            <strong className="text-[var(--text-secondary)]">{globalCount}</strong> {t("header.global")}
-          </span>
-        </div>
+        {/* Whitepaper Link (Extreme Visibility) */}
+        <Link
+          href="/whitepaper"
+          className="flex items-center gap-1.5 px-3 py-1 rounded bg-rose-500 hover:bg-rose-400 text-white shadow-lg shadow-rose-500/20 no-underline transition-all group scale-90 sm:scale-100 origin-left"
+          title="Whitepaper / 白皮书"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="group-hover:rotate-12 transition-transform">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+          <span className="font-black text-[10px] tracking-widest uppercase">白皮书</span>
+        </Link>
+      </div>
+
+      <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] ml-1">
+        <span>
+          <strong className="text-[var(--text-secondary)]">{marketCount}</strong> {t("header.mapped")}
+        </span>
+        <span className="text-[var(--border)]">|</span>
+        <span>
+          <strong className="text-[var(--text-secondary)]">{globalCount}</strong> {t("header.global")}
+        </span>
       </div>
 
       <div className="flex-1" />

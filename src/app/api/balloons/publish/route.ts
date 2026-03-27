@@ -89,16 +89,48 @@ async function enrichMatchWithAi(draft: BalloonDraft, existing = listBalloons())
 
 export async function POST(request: NextRequest) {
   try {
+    const body = await request.json();
+    const draft = body?.draft as BalloonDraft | undefined;
+    const isSimulation = !!body?.simulation;
+    let txHash = typeof body?.txHash === "string" ? body.txHash.trim() : "";
+    const sessionToken = typeof body?.sessionToken === "string" ? body.sessionToken : null;
+    const chainId = Number(body?.chainId ?? POLYGON_CHAIN_ID);
+
+    if (isSimulation) {
+      if (!draft || !draft.title?.trim() || !draft.content?.trim() || !draft.author?.trim()) {
+        return NextResponse.json({ error: "missing draft data" }, { status: 400 });
+      }
+      if (!txHash) txHash = `simulated_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      
+      const { getTradeSession } = await import("@/lib/tradeSession");
+      const session = sessionToken ? getTradeSession(sessionToken) : null;
+      const fromAddress = (session?.address || draft.wallet || "0x_anonymous").toLowerCase();
+
+      const match = await enrichMatchWithAi(draft);
+      const platformFee = (draft.stake || 0) * 0.1;
+      const initialCurrentStake = (draft.stake || 0) - platformFee;
+
+      const { getDb } = await import("@/lib/db");
+      const db = getDb();
+      db.prepare("UPDATE platform_treasury SET total_usdt = total_usdt + ? WHERE id = 1").run(platformFee);
+
+      const { createPersistedBalloon } = await import("@/lib/balloonRepo");
+      const post = createPersistedBalloon({
+        draft: { ...draft, stake: initialCurrentStake, wallet: fromAddress },
+        match,
+        txHash,
+        proxyAddress: session?.proxyAddress ?? null,
+        chainId: chainId,
+        stakeToken: "SIMULATED",
+      });
+
+      return NextResponse.json({ balloon: post, summary: match.summary });
+    }
+
     const recipient = getStakeRecipient();
     if (!recipient) {
       return NextResponse.json({ error: "BALLOON_STAKE_RECIPIENT is not configured" }, { status: 500 });
     }
-
-    const body = await request.json();
-    const draft = body?.draft as BalloonDraft | undefined;
-    const txHash = typeof body?.txHash === "string" ? body.txHash.trim() : "";
-    const sessionToken = typeof body?.sessionToken === "string" ? body.sessionToken : null;
-    const chainId = Number(body?.chainId ?? POLYGON_CHAIN_ID);
 
     if (!draft || !txHash || !/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
       return NextResponse.json({ error: "draft and txHash are required" }, { status: 400 });
@@ -136,25 +168,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `stake mismatch: expected ${draft.stake}, got ${onchainAmount}` }, { status: 400 });
     }
 
-    const fromAddress = topicToAddress(matchingTransfer.topics?.[1]);
-    if (!fromAddress) {
+    const rawFromAddress = topicToAddress(matchingTransfer.topics?.[1]);
+    if (!rawFromAddress) {
       return NextResponse.json({ error: "could not resolve sender address from transfer log" }, { status: 400 });
     }
+    const fromAddress = rawFromAddress.toLowerCase();
 
-    const session = sessionToken ? getTradeSession(sessionToken) : null;
+    const { getTradeSession: getTradeSessionAuth } = await import("@/lib/tradeSession");
+    const session = sessionToken ? getTradeSessionAuth(sessionToken) : null;
     if (session && session.proxyAddress.toLowerCase() !== fromAddress && session.address.toLowerCase() !== fromAddress) {
       return NextResponse.json({ error: "transaction sender does not match the active wallet session" }, { status: 403 });
     }
 
     const normalizedDraft: BalloonDraft = {
       ...draft,
-      wallet: session?.address ?? fromAddress,
+      wallet: (session?.address ?? fromAddress).toLowerCase(),
       stake: onchainAmount,
     };
 
     const match = await enrichMatchWithAi(normalizedDraft);
+    
+    // 10% Initial Platform Fee
+    const platformFee = normalizedDraft.stake * 0.1;
+    const initialCurrentStake = normalizedDraft.stake - platformFee;
+
+    const { getDb } = await import("@/lib/db");
+    const db = getDb();
+    db.prepare("UPDATE platform_treasury SET total_usdt = total_usdt + ? WHERE id = 1").run(platformFee);
+
+    const { createPersistedBalloon } = await import("@/lib/balloonRepo");
     const post = createPersistedBalloon({
-      draft: normalizedDraft,
+      draft: { ...normalizedDraft, stake: initialCurrentStake },
       match,
       txHash,
       proxyAddress: session?.proxyAddress ?? (session?.address.toLowerCase() === fromAddress ? null : fromAddress),

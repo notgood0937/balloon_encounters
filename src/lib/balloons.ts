@@ -10,6 +10,7 @@ export interface BalloonPost {
   content: string;
   tags: string[];
   stake: number;
+  originalStake?: number;
   coords: [number, number];
   createdAt: string;
   txHash?: string | null;

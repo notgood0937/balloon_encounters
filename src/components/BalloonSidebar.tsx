@@ -70,9 +70,16 @@ export default function BalloonSidebar({
           <>
             <div className="mt-3 flex items-center justify-between gap-3">
               <h3 className="text-xl font-semibold tracking-[-0.03em] text-white">{selected.title}</h3>
-              <span className="rounded-full border border-emerald-400/25 bg-emerald-400/12 px-2.5 py-1 text-[11px] text-emerald-100">
-                ${selected.stake}
-              </span>
+              <div className="flex flex-col items-end">
+                <span className="rounded-full border border-emerald-400/25 bg-emerald-400/12 px-2.5 py-1 text-[11px] text-emerald-100">
+                  ${selected.stake.toFixed(4)}
+                </span>
+                {selected.originalStake && selected.originalStake > selected.stake && (
+                  <span className="mt-1 text-[10px] text-red-400/70">
+                    -{(((selected.originalStake - selected.stake) / selected.originalStake) * 100).toFixed(2)}% 已衰减
+                  </span>
+                )}
+              </div>
             </div>
             <div className="mt-2 text-[12px] uppercase tracking-[0.22em] text-white/38">{selected.kind}</div>
             <p className="mt-3 text-sm leading-6 text-white/76">{selected.content}</p>

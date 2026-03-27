@@ -43,7 +43,19 @@ export default function Home() {
   const [creating, setCreating] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [simulationWalletId, setSimulationWalletId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let sid = localStorage.getItem("balloon_sim_wallet_id");
+    if (!sid) {
+      sid = `0x_sim_${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem("balloon_sim_wallet_id", sid);
+    }
+    setSimulationWalletId(sid);
+  }, []);
   const [windPoints, setWindPoints] = useState(0);
+  const [myTotalStake, setMyTotalStake] = useState(0);
+  const [ecoStats, setEcoStats] = useState({ platformTreasury: 0, totalEcosystemStake: 0, activeBalloons: 0, dailyDecayRate: 0.02 });
 
   useEffect(() => {
     let cancelled = false;
@@ -72,17 +84,41 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!walletAddress) return;
+    const effectiveAddress = walletAddress || simulationWalletId;
+    if (!effectiveAddress) {
+      setWindPoints(0);
+      setMyTotalStake(0);
+      return;
+    }
     const fetchPoints = () => {
-      fetch(`/api/user/points?address=${walletAddress}`)
+      fetch(`/api/user/points?address=${effectiveAddress}`)
         .then(res => res.json())
-        .then(data => setWindPoints(data.windPoints || 0))
+        .then(data => {
+          setWindPoints(data.windPoints || 0);
+          setMyTotalStake(data.totalStake || 0);
+        })
         .catch(err => console.error("Failed to fetch points", err));
     };
     fetchPoints();
     window.addEventListener("balloon-encounters:points-updated", fetchPoints);
     return () => window.removeEventListener("balloon-encounters:points-updated", fetchPoints);
-  }, [walletAddress]);
+  }, [walletAddress, simulationWalletId]);
+
+  useEffect(() => {
+    const fetchEco = () => {
+      fetch("/api/economy/stats")
+        .then(res => res.json())
+        .then(data => setEcoStats(data))
+        .catch(() => {});
+    };
+    fetchEco();
+    const timer = window.setInterval(fetchEco, 30000); // 30s refresh
+    window.addEventListener("balloon-encounters:points-updated", fetchEco);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("balloon-encounters:points-updated", fetchEco);
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 110);
@@ -106,20 +142,44 @@ export default function Home() {
     setPublishError(null);
     try {
       if (!recipientConfigured) {
-        // Simulation path: skip blockchain and API, just add to local state
+        // Simulation path: try to persist to API for stats/points
+        try {
+          const res = await fetch("/api/balloons/publish", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              draft: { ...draft, wallet: walletAddress || simulationWalletId || "0x_anonymous_sim" },
+              simulation: true,
+              chainId: polygon.id,
+              sessionToken: tradeSession?.sessionToken ?? null,
+            })
+          });
+          if (res.ok) {
+            const payload = await res.json();
+            const persistentPost = payload.balloon;
+            setBalloons((prev) => [persistentPost, ...prev.filter(b => b.id !== persistentPost.id)]);
+            setSelectedBalloonId(persistentPost.id);
+            setAiSummary(payload.summary || null);
+            window.dispatchEvent(new CustomEvent("balloon-encounters:points-updated"));
+            return;
+          }
+        } catch (err) {
+          console.error("Simulation persistence failed", err);
+        }
+
+        // Fallback to local-only if API fails
         const match = matchDraftToBalloons(draft, balloons);
         const post = createBalloonPost(draft, match);
-        const nextBalloons = [post, ...balloons];
-        setBalloons(nextBalloons);
+        setBalloons((prev) => [post, ...prev]);
         setSelectedBalloonId(post.id);
         setAiSummary(match.summary);
-
+        
         // Persist to localStorage
         const saved = localStorage.getItem("polyworld_demo_balloons");
         const demoBalloons = saved ? JSON.parse(saved) as BalloonPost[] : [];
         localStorage.setItem("polyworld_demo_balloons", JSON.stringify([post, ...demoBalloons].slice(0, 50)));
 
-        console.log("Simulated balloon published and persisted:", post);
+        console.log("Simulated balloon published and persisted locally:", post);
         return;
       }
 
@@ -171,6 +231,7 @@ export default function Home() {
       setBalloons((prev) => [post, ...prev.filter((item) => item.id !== post.id)]);
       setSelectedBalloonId(post.id);
       setAiSummary(payload.summary ?? null);
+      window.dispatchEvent(new CustomEvent("balloon-encounters:points-updated"));
     } finally {
       setCreating(false);
     }
@@ -216,20 +277,35 @@ export default function Home() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <div className="rounded-[20px] border border-white/10 bg-black/25 px-4 py-3 text-sm text-white/70">
-                {isConnected && walletAddress
-                  ? `${windPoints} 风力积分 · ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-                  : "连接钱包后即可发布漂流气球"}
-              </div>
+              {isConnected && walletAddress ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 transition hover:bg-emerald-500/20">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-emerald-300/80">My Stake</span>
+                    <span className="text-sm font-bold text-white">${myTotalStake.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 rounded-full border border-fuchsia-500/25 bg-fuchsia-500/10 px-3 py-1.5 transition hover:bg-fuchsia-500/20">
+                    <span className="text-[10px] font-medium uppercase tracking-wider text-fuchsia-300/80">Wind Points</span>
+                    <span className="text-sm font-bold text-white">{windPoints}</span>
+                  </div>
+                  <div className="ml-2 h-4 w-px bg-white/10" />
+                  <div className="text-[12px] tabular-nums text-white/40">
+                    {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-full border border-white/10 bg-black/25 px-4 py-2 text-sm text-white/40">
+                  连接钱包后即可发布漂流气球
+                </div>
+              )}
               <WalletButton />
             </div>
           </div>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard label="漂流气球" value={`${balloons.length}`} detail="用户发布的人类表达" />
-            <MetricCard label="社交资金" value={`$${totalStake}`} detail="所有气球的 stake 总和" />
-            <MetricCard label="DeFi / 社交权重" value={`${defiWeighted}/${balloons.length}`} detail={`${clusters.length} 个正在形成的相似气团`} />
-            <MetricCard label="链上已确认" value={`${onchainCount}`} detail={recipientConfigured ? "已验真并写入 SQLite" : "等待配置接收地址"} />
+            <MetricCard label="活跃气球" value={`${balloons.length}`} detail="包含种子数据与链上气球" />
+            <MetricCard label="平台国库" value={`$${ecoStats.platformTreasury.toFixed(4)}`} detail="衰减资金累计及维护费" />
+            <MetricCard label="生态总质押" value={`$${totalStake.toFixed(2)}`} detail="全网气球当前价值总合" />
+            <MetricCard label="平均衰减率" value={`${(ecoStats.dailyDecayRate * 100).toFixed(0)}%/天`} detail="模型预设的社交热度消退速度" />
           </div>
         </header>
 

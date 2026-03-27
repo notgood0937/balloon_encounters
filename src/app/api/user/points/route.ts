@@ -15,8 +15,14 @@ export async function GET(request: NextRequest) {
 
     const db = getDb();
     const row = db.prepare("SELECT wind_points FROM user_points WHERE wallet_address = ?").get(address) as { wind_points: number } | undefined;
+    
+    // Also fetch total active stake for this user
+    const stakeRow = db.prepare("SELECT SUM(current_stake) as total_stake FROM balloons WHERE wallet_address = ?").get(address) as { total_stake: number } | undefined;
 
-    return NextResponse.json({ windPoints: row?.wind_points ?? 0 });
+    return NextResponse.json({ 
+      windPoints: row?.wind_points ?? 0,
+      totalStake: stakeRow?.total_stake ?? 0
+    });
   } catch (error) {
     console.error("[user points GET]", error);
     return NextResponse.json({ error: "failed to load points" }, { status: 500 });

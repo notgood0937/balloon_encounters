@@ -43,6 +43,7 @@ function rowToBalloon(row: BalloonRow): BalloonPost {
       ? parseJsonArray(row.canonical_tags_json)
       : parseJsonArray(row.tags_json),
     stake: Number(row.current_stake ?? row.stake_usdt),
+    originalStake: Number(row.stake_usdt),
     coords: [Number(row.lat), Number(row.lng)],
     createdAt: row.created_at,
     txHash: row.tx_hash,
@@ -113,6 +114,7 @@ export function createPersistedBalloon(input: {
 
   return {
     ...post,
+    originalStake: input.draft.stake,
     proxyAddress: input.proxyAddress ?? null,
     txHash: input.txHash,
     source: "onchain",
