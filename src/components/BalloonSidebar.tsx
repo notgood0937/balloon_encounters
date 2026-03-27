@@ -10,6 +10,8 @@ interface BalloonSidebarProps {
   selectedBalloonId: string | null;
   aiSummary: string | null;
   onSelectBalloon: (balloonId: string) => void;
+  effectiveAddress?: string | null;
+  simulationMode?: boolean;
 }
 
 export default function BalloonSidebar({
@@ -18,17 +20,40 @@ export default function BalloonSidebar({
   selectedBalloonId,
   aiSummary,
   onSelectBalloon,
+  effectiveAddress,
+  simulationMode = false,
 }: BalloonSidebarProps) {
   const walletAddress = useWalletStore((state) => state.address);
+  const actorAddress = effectiveAddress ?? walletAddress;
   const [localPoints, setLocalPoints] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!walletAddress) {
+    if (!actorAddress) {
       setLocalPoints(null);
       return;
     }
+
+    if (simulationMode) {
+      try {
+        const raw = localStorage.getItem(`balloon_points:${actorAddress.toLowerCase()}`);
+        setLocalPoints(raw ? Number(raw) : 0);
+      } catch {
+        setLocalPoints(0);
+      }
+      const syncPoints = () => {
+        try {
+          const raw = localStorage.getItem(`balloon_points:${actorAddress.toLowerCase()}`);
+          setLocalPoints(raw ? Number(raw) : 0);
+        } catch {
+          setLocalPoints(0);
+        }
+      };
+      window.addEventListener("balloon-encounters:points-updated", syncPoints);
+      return () => window.removeEventListener("balloon-encounters:points-updated", syncPoints);
+    }
+
     const fetchPoints = () => {
-      fetch(`/api/user/points?address=${walletAddress}`)
+      fetch(`/api/user/points?address=${actorAddress}`)
         .then(res => res.json())
         .then(data => setLocalPoints(data.windPoints || 0))
         .catch(() => {});
@@ -36,7 +61,7 @@ export default function BalloonSidebar({
     fetchPoints();
     window.addEventListener("balloon-encounters:points-updated", fetchPoints);
     return () => window.removeEventListener("balloon-encounters:points-updated", fetchPoints);
-  }, [walletAddress]);
+  }, [actorAddress, simulationMode]);
 
   const clusters = buildBalloonClusters(balloons, now).slice(0, 6);
   const selected = balloons.find((balloon) => balloon.id === selectedBalloonId) ?? balloons[0] ?? null;
@@ -44,15 +69,27 @@ export default function BalloonSidebar({
   const [hasInteracted, setHasInteracted] = useState(false);
 
   useEffect(() => {
-    if (!walletAddress || !selected?.id) {
+    if (!actorAddress || !selected?.id) {
       setHasInteracted(false);
       return;
     }
-    fetch(`/api/balloons/interact/status?balloonId=${selected.id}&address=${walletAddress}`)
+
+    if (simulationMode) {
+      try {
+        const raw = localStorage.getItem(`balloon_interactions:${actorAddress.toLowerCase()}`);
+        const ids = raw ? JSON.parse(raw) as string[] : [];
+        setHasInteracted(ids.includes(selected.id));
+      } catch {
+        setHasInteracted(false);
+      }
+      return;
+    }
+
+    fetch(`/api/balloons/interact/status?balloonId=${selected.id}&address=${actorAddress}`)
       .then(res => res.json())
       .then(data => setHasInteracted(!!data.interacted))
       .catch(() => {});
-  }, [walletAddress, selected?.id]);
+  }, [actorAddress, selected?.id, simulationMode]);
   const formattedCreatedAt = selected ? formatStableTimestamp(selected.createdAt) : null;
 
   return (
@@ -96,11 +133,33 @@ export default function BalloonSidebar({
                 type="button"
                 disabled={hasInteracted}
                 onClick={async () => {
-                  if (!walletAddress) {
-                    alert("请先连接钱包");
+                  if (!actorAddress) {
+                    alert(simulationMode ? "模拟身份未初始化，请刷新页面" : "请先连接钱包");
                     return;
                   }
                   if (hasInteracted) return;
+
+                  if (simulationMode) {
+                    try {
+                      const interactionKey = `balloon_interactions:${actorAddress.toLowerCase()}`;
+                      const pointsKey = `balloon_points:${actorAddress.toLowerCase()}`;
+                      const rawIds = localStorage.getItem(interactionKey);
+                      const ids = rawIds ? JSON.parse(rawIds) as string[] : [];
+                      if (ids.includes(selected.id)) {
+                        setHasInteracted(true);
+                        return;
+                      }
+                      localStorage.setItem(interactionKey, JSON.stringify([...ids, selected.id]));
+                      const currentPoints = Number(localStorage.getItem(pointsKey) ?? "0");
+                      localStorage.setItem(pointsKey, String(currentPoints + 1));
+                      setLocalPoints(currentPoints + 1);
+                      setHasInteracted(true);
+                      window.dispatchEvent(new CustomEvent("balloon-encounters:points-updated"));
+                    } catch (err) {
+                      console.error("Simulation interaction failed", err);
+                    }
+                    return;
+                  }
 
                   try {
                     const res = await fetch("/api/balloons/interact", {
@@ -108,7 +167,7 @@ export default function BalloonSidebar({
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
                         balloonId: selected.id,
-                        walletAddress: walletAddress,
+                        walletAddress: actorAddress,
                         action: "click"
                       })
                     });

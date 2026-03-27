@@ -57,6 +57,9 @@ export default function Home() {
   const [windPoints, setWindPoints] = useState(0);
   const [myTotalStake, setMyTotalStake] = useState(0);
   const [ecoStats, setEcoStats] = useState({ platformTreasury: 0, totalEcosystemStake: 0, activeBalloons: 0, dailyDecayRate: 0.02 });
+  const recipientConfigured = /^0x[a-fA-F0-9]{40}$/.test(STAKE_RECIPIENT);
+  const simulationMode = !recipientConfigured;
+  const effectiveAddress = walletAddress || simulationWalletId;
 
   useEffect(() => {
     let cancelled = false;
@@ -85,12 +88,29 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const effectiveAddress = walletAddress || simulationWalletId;
     if (!effectiveAddress) {
       setWindPoints(0);
       setMyTotalStake(0);
       return;
     }
+
+    if (simulationMode) {
+      const syncLocalStats = () => {
+        try {
+          const points = Number(localStorage.getItem(`balloon_points:${effectiveAddress.toLowerCase()}`) ?? "0");
+          const stake = Number(localStorage.getItem(`balloon_sim_total_stake:${effectiveAddress.toLowerCase()}`) ?? "0");
+          setWindPoints(points);
+          setMyTotalStake(stake);
+        } catch {
+          setWindPoints(0);
+          setMyTotalStake(0);
+        }
+      };
+      syncLocalStats();
+      window.addEventListener("balloon-encounters:points-updated", syncLocalStats);
+      return () => window.removeEventListener("balloon-encounters:points-updated", syncLocalStats);
+    }
+
     const fetchPoints = () => {
       fetch(`/api/user/points?address=${effectiveAddress}`)
         .then(res => res.json())
@@ -103,9 +123,30 @@ export default function Home() {
     fetchPoints();
     window.addEventListener("balloon-encounters:points-updated", fetchPoints);
     return () => window.removeEventListener("balloon-encounters:points-updated", fetchPoints);
-  }, [walletAddress, simulationWalletId]);
+  }, [effectiveAddress, simulationMode]);
 
   useEffect(() => {
+    if (simulationMode) {
+      const syncEco = () => {
+        try {
+          const saved = localStorage.getItem("polyworld_demo_balloons");
+          const demoBalloons = saved ? JSON.parse(saved) as BalloonPost[] : [];
+          const total = demoBalloons.reduce((sum, balloon) => sum + balloon.stake, 0);
+          setEcoStats({
+            platformTreasury: 0,
+            totalEcosystemStake: total,
+            activeBalloons: demoBalloons.length,
+            dailyDecayRate: 0.02,
+          });
+        } catch {
+          setEcoStats({ platformTreasury: 0, totalEcosystemStake: 0, activeBalloons: 0, dailyDecayRate: 0.02 });
+        }
+      };
+      syncEco();
+      window.addEventListener("balloon-encounters:points-updated", syncEco);
+      return () => window.removeEventListener("balloon-encounters:points-updated", syncEco);
+    }
+
     const fetchEco = () => {
       fetch("/api/economy/stats")
         .then(res => res.json())
@@ -119,7 +160,7 @@ export default function Home() {
       window.clearInterval(timer);
       window.removeEventListener("balloon-encounters:points-updated", fetchEco);
     };
-  }, []);
+  }, [simulationMode]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -129,51 +170,37 @@ export default function Home() {
   }, [hydrated]);
 
   const totalStake = useMemo(() => balloons.reduce((sum, balloon) => sum + balloon.stake, 0), [balloons]);
-  const recipientConfigured = /^0x[a-fA-F0-9]{40}$/.test(STAKE_RECIPIENT);
 
   async function handleCreate(draft: BalloonDraft) {
     setCreating(true);
     setPublishError(null);
     try {
-      if (!recipientConfigured) {
-        // Simulation path: try to persist to API for stats/points
-        try {
-          const res = await fetch("/api/balloons/publish", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              draft: { ...draft, wallet: walletAddress || simulationWalletId || "0x_anonymous_sim" },
-              simulation: true,
-              chainId: polygon.id,
-              sessionToken: tradeSession?.sessionToken ?? null,
-            })
-          });
-          if (res.ok) {
-            const payload = await res.json();
-            const persistentPost = payload.balloon;
-            setBalloons((prev) => [persistentPost, ...prev.filter(b => b.id !== persistentPost.id)]);
-            setSelectedBalloonId(persistentPost.id);
-            setAiSummary(payload.summary || null);
-            window.dispatchEvent(new CustomEvent("balloon-encounters:points-updated"));
-            return;
-          }
-        } catch (err) {
-          console.error("Simulation persistence failed", err);
-        }
-
-        // Fallback to local-only if API fails
-        const match = matchDraftToBalloons(draft, balloons);
-        const post = createBalloonPost(draft, match);
+      if (simulationMode) {
+        const actor = effectiveAddress || "0x_anonymous_sim";
+        const match = matchDraftToBalloons({ ...draft, wallet: actor }, balloons);
+        const post: BalloonPost = {
+          ...createBalloonPost({ ...draft, wallet: actor }, match),
+          originalStake: draft.stake,
+          source: "seed",
+          txHash: null,
+        };
         setBalloons((prev) => [post, ...prev]);
         setSelectedBalloonId(post.id);
         setAiSummary(match.summary);
-        
-        // Persist to localStorage
-        const saved = localStorage.getItem("polyworld_demo_balloons");
-        const demoBalloons = saved ? JSON.parse(saved) as BalloonPost[] : [];
-        localStorage.setItem("polyworld_demo_balloons", JSON.stringify([post, ...demoBalloons].slice(0, 50)));
-
-        console.log("Simulated balloon published and persisted locally:", post);
+        try {
+          const saved = localStorage.getItem("polyworld_demo_balloons");
+          const demoBalloons = saved ? JSON.parse(saved) as BalloonPost[] : [];
+          localStorage.setItem("polyworld_demo_balloons", JSON.stringify([post, ...demoBalloons].slice(0, 50)));
+          const pointsKey = `balloon_points:${actor.toLowerCase()}`;
+          const stakeKey = `balloon_sim_total_stake:${actor.toLowerCase()}`;
+          const points = Number(localStorage.getItem(pointsKey) ?? "0");
+          const stake = Number(localStorage.getItem(stakeKey) ?? "0");
+          localStorage.setItem(pointsKey, String(points + 3));
+          localStorage.setItem(stakeKey, String(stake + post.stake));
+        } catch (err) {
+          console.error("Simulation persistence failed", err);
+        }
+        window.dispatchEvent(new CustomEvent("balloon-encounters:points-updated"));
         return;
       }
 
@@ -359,6 +386,8 @@ export default function Home() {
               selectedBalloonId={selectedBalloonId}
               aiSummary={aiSummary}
               onSelectBalloon={setSelectedBalloonId}
+              effectiveAddress={effectiveAddress}
+              simulationMode={simulationMode}
             />
           </div>
         </section>
