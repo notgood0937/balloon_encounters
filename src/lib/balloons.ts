@@ -140,14 +140,34 @@ export function driftBalloon(post: BalloonPost, timeMs: number): [number, number
   // Power scales from 0 to 1 over 2 seconds so it starts exactly at coords
   const power = Math.min(1, elapsed / 2000);
   
+  // Unique velocities for each balloon
+  const vLatSeed = seededUnit(`${post.id}:vLat`);
+  const vLngSeed = seededUnit(`${post.id}:vLng`);
+  
+  // Longitude drift: -0.015 to 0.045 deg/sec (mostly east-drift)
+  const vLng = (vLngSeed * 0.06 - 0.015) * power;
+  // Latitude drift: -0.01 to 0.01 deg/sec
+  const vLat = (vLatSeed * 0.02 - 0.01) * power;
+
+  // Global linear drift
+  let lat = post.coords[0] + vLat * t;
+  let lng = post.coords[1] + vLng * t;
+  
+  // Longitude wrap: -180 to 180
+  lng = ((lng + 180) % 360 + 360) % 360 - 180;
+  
+  // Latitude bounce: 0 -> 1 -> 0 over its period for -85 to 85 range
+  const phase = (lat + 85) / 170;
+  const bounce = Math.abs(((phase % 2) + 2) % 2 - 1);
+  lat = -85 + bounce * 170;
+  
+  // Local high-frequency "string sway" noise
   const waveA = seededUnit(`${post.id}:a`);
   const waveB = seededUnit(`${post.id}:b`);
+  const swayLat = Math.sin(t * (0.4 + waveA * 0.2) + waveB * Math.PI * 2) * (0.05 + waveA * 0.03);
+  const swayLng = Math.cos(t * (0.3 + waveB * 0.2) + waveA * Math.PI * 2) * (0.08 + waveB * 0.04);
   
-  // Increased multipliers for visibility, scaled by power
-  const latOffset = Math.sin(t * (0.12 + waveA * 0.08) + waveB * Math.PI * 2) * (1.2 + waveA * 0.6) * power;
-  const lngOffset = Math.cos(t * (0.10 + waveB * 0.08) + waveA * Math.PI * 2) * (1.8 + waveB * 0.9) * power;
-  
-  return [post.coords[0] + latOffset, post.coords[1] + lngOffset];
+  return [lat + swayLat, lng + swayLng];
 }
 
 function approxDistance(a: [number, number], b: [number, number]): number {
