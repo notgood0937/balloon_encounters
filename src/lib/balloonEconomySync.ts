@@ -1,5 +1,23 @@
 import { getDb } from "./db";
-import { buildBalloonClusters, type BalloonPost } from "./balloons";
+import type { BalloonPost } from "./balloons";
+
+interface BalloonEconomyRow {
+  id: string;
+  author: string;
+  wallet_address: string;
+  proxy_address?: string | null;
+  kind: BalloonPost["kind"];
+  title: string;
+  content: string;
+  tags_json: string;
+  current_stake: number;
+  stake_usdt: number;
+  lat: number;
+  lng: number;
+  created_at: string;
+  last_decay_at?: string | null;
+  tx_hash?: string | null;
+}
 
 /**
  * Balloon Economy Sync
@@ -16,7 +34,7 @@ export async function processBalloonEconomy() {
 
   // 1. Fetch all active balloons
   // Note: we need to parse tags/canonical_tags from JSON
-  const rawBalloons = db.prepare("SELECT * FROM balloons").all() as any[];
+  const rawBalloons = db.prepare("SELECT * FROM balloons").all() as BalloonEconomyRow[];
   const balloons: BalloonPost[] = rawBalloons.map(b => ({
     id: b.id,
     author: b.author,

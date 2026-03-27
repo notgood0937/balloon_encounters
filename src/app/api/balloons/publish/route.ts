@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTradeSession } from "@/lib/tradeSession";
-import { createPersistedBalloon, listBalloons } from "@/lib/balloonRepo";
+import { listBalloons } from "@/lib/balloonRepo";
 import { matchDraftToBalloons, type BalloonDraft, type BalloonMatchResult } from "@/lib/balloons";
 import { client, isAiConfigured } from "@/lib/ai";
 

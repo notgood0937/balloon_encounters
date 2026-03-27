@@ -8,7 +8,6 @@ import BalloonComposer from "@/components/BalloonComposer";
 import BalloonSidebar from "@/components/BalloonSidebar";
 import { useWalletStore } from "@/stores/walletStore";
 import {
-  buildBalloonClusters,
   createBalloonPost,
   getSeedBalloons,
   matchDraftToBalloons,
@@ -39,13 +38,15 @@ export default function Home() {
   const tradeSession = useWalletStore((state) => state.tradeSession);
   const [balloons, setBalloons] = useState<BalloonPost[]>(() => getSeedBalloons());
   const [selectedBalloonId, setSelectedBalloonId] = useState<string | null>(() => getSeedBalloons()[0]?.id ?? null);
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(0);
   const [creating, setCreating] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [simulationWalletId, setSimulationWalletId] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    setHydrated(true);
     let sid = localStorage.getItem("balloon_sim_wallet_id");
     if (!sid) {
       sid = `0x_sim_${Math.random().toString(36).slice(2, 10)}`;
@@ -121,20 +122,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
+    setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 110);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [hydrated]);
 
-  const clusters = useMemo(() => buildBalloonClusters(balloons, now), [balloons, now]);
   const totalStake = useMemo(() => balloons.reduce((sum, balloon) => sum + balloon.stake, 0), [balloons]);
-  const defiWeighted = useMemo(
-    () => balloons.filter((balloon) => balloon.tags.some((tag) => ["defi", "onchain", "builder", "social"].includes(tag))).length,
-    [balloons],
-  );
-  const onchainCount = useMemo(
-    () => balloons.filter((balloon) => balloon.source === "onchain").length,
-    [balloons],
-  );
   const recipientConfigured = /^0x[a-fA-F0-9]{40}$/.test(STAKE_RECIPIENT);
 
   async function handleCreate(draft: BalloonDraft) {

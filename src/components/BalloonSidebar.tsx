@@ -53,14 +53,7 @@ export default function BalloonSidebar({
       .then(data => setHasInteracted(!!data.interacted))
       .catch(() => {});
   }, [walletAddress, selected?.id]);
-  const formattedCreatedAt = selected
-    ? new Date(selected.createdAt).toLocaleString("zh-CN", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : null;
+  const formattedCreatedAt = selected ? formatStableTimestamp(selected.createdAt) : null;
 
   return (
     <div className="space-y-4">
@@ -210,4 +203,14 @@ export default function BalloonSidebar({
       </section>
     </div>
   );
+}
+
+function formatStableTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const hour = String(date.getUTCHours()).padStart(2, "0");
+  const minute = String(date.getUTCMinutes()).padStart(2, "0");
+  return `${month}-${day} ${hour}:${minute} UTC`;
 }
