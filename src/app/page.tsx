@@ -43,6 +43,7 @@ export default function Home() {
   const [creating, setCreating] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [windPoints, setWindPoints] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +70,19 @@ export default function Home() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!walletAddress) return;
+    const fetchPoints = () => {
+      fetch(`/api/user/points?address=${walletAddress}`)
+        .then(res => res.json())
+        .then(data => setWindPoints(data.windPoints || 0))
+        .catch(err => console.error("Failed to fetch points", err));
+    };
+    fetchPoints();
+    window.addEventListener("balloon-encounters:points-updated", fetchPoints);
+    return () => window.removeEventListener("balloon-encounters:points-updated", fetchPoints);
+  }, [walletAddress]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 110);
@@ -204,7 +218,7 @@ export default function Home() {
             <div className="flex flex-wrap items-center gap-3">
               <div className="rounded-[20px] border border-white/10 bg-black/25 px-4 py-3 text-sm text-white/70">
                 {isConnected && walletAddress
-                  ? `钱包已连接 ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+                  ? `${windPoints} 风力积分 · ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
                   : "连接钱包后即可发布漂流气球"}
               </div>
               <WalletButton />
@@ -230,21 +244,31 @@ export default function Home() {
 
             <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
               <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
-                <div className="text-[11px] uppercase tracking-[0.28em] text-cyan-200/70">Why This Works</div>
-                <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-white">让标签相似的人，不靠刷 feed，而靠漂流和聚合被看见</h2>
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  <FeatureCard title="Human posts" body="内容来自用户亲自发布，主题可以是情绪、故事、愿景或链上合作信号。" />
-                  <FeatureCard title="AI matching" body="AI 会把原始标签归一化，并把情绪和 DeFi 语义放进同一聚类图里。" />
-                  <FeatureCard title="Stake gravity" body="1-5 USDT 不只是打赏，而是气球的引力，让聚合结果更有密度。" />
+                <div className="text-[11px] uppercase tracking-[0.28em] text-cyan-200/70">The Economic Model</div>
+                <h2 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-white">让社交在漂流中聚合，在博弈中沉淀</h2>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <FeatureCard title="社交引力 (Gravity)" body="1-5 USDT 质押定义了气球的“质量”。高质量气球聚合半径更大，能更快锚定相似语义的社区。" />
+                  <FeatureCard title="衰减与爆破 (Lifecycle)" body="气球每日扣除 2% 质押给聚合国库。质押低于 0.5 USDT 时强制爆破，确保地图永远新鲜高价值。" />
+                  <FeatureCard title="聚合国库 (Treasury)" body="气团内累积的衰减金形成共同价值池。核心成员可获得奖励，或用其将气团锚定在特定地理坐标。" />
+                  <FeatureCard title="社交挖矿 (Mining)" body="AI 根据原创度和聚类贡献度发放“风力积分”。共鸣（点击、关注）可赚取积分，用于变现或功能兑换。" />
                 </div>
               </section>
 
               <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl">
-                <div className="text-[11px] uppercase tracking-[0.28em] text-fuchsia-200/70">Social Finance Loop</div>
-                <div className="mt-3 space-y-3 text-sm leading-6 text-white/72">
-                  <p>用户发布气球并绑定钱包身份，stake 形成最轻量的社交承诺。</p>
-                  <p>语义相似的气球在地图上漂动时会合成更大的球，形成主题社群。</p>
-                  <p>后续可以在大球上继续接入任务、资金池、membership NFT 或合作提案。</p>
+                <div className="text-[11px] uppercase tracking-[0.28em] text-fuchsia-200/70">Platform Monetization</div>
+                <div className="mt-3 space-y-4 text-sm leading-6 text-white/72">
+                  <div>
+                    <strong className="text-white/90">● 发布费 & AI 维护：</strong>
+                    <p>每只气球 10% 的初始质押会进入平台库，用于覆盖 AI 标签处理、新闻匹配和地图算力的持续支出。</p>
+                  </div>
+                  <div>
+                    <strong className="text-white/90">● 增值漂流服务：</strong>
+                    <p>用户可以购买“顺风车”服务（0.5 USDT）手动调整漂移轨迹，或购买“锚定器”（1 USDT）让气球在特定经纬度保持静止。</p>
+                  </div>
+                  <div>
+                    <strong className="text-white/90">● 社交信号溢价：</strong>
+                    <p>对于 Signal 类型气球，如果关联的 DeFi 市场预测准确，该气球将被赋予“高亮光晕”，提升社交曝光度和信用分。</p>
+                  </div>
                 </div>
               </section>
             </div>

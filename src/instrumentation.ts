@@ -50,6 +50,8 @@ export async function register() {
     startTweetsSyncLoop();
     const { startResolutionSyncLoop, stopResolutionSyncLoop } = await import("./lib/resolutionSync");
     startResolutionSyncLoop();
+    const { startEconomySync } = await import("./lib/balloonEconomySync");
+    startEconomySync();
     globalThis.__balloonEncountersRuntimeStarted = true;
 
     if (!globalThis.__balloonEncountersShutdownBound) {

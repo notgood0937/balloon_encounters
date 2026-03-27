@@ -1,6 +1,8 @@
 "use client";
 
 import { buildBalloonClusters, type BalloonPost } from "@/lib/balloons";
+import { useWalletStore } from "@/stores/walletStore";
+import { useState, useEffect } from "react";
 
 interface BalloonSidebarProps {
   balloons: BalloonPost[];
@@ -17,8 +19,40 @@ export default function BalloonSidebar({
   aiSummary,
   onSelectBalloon,
 }: BalloonSidebarProps) {
+  const walletAddress = useWalletStore((state) => state.address);
+  const [localPoints, setLocalPoints] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!walletAddress) {
+      setLocalPoints(null);
+      return;
+    }
+    const fetchPoints = () => {
+      fetch(`/api/user/points?address=${walletAddress}`)
+        .then(res => res.json())
+        .then(data => setLocalPoints(data.windPoints || 0))
+        .catch(() => {});
+    };
+    fetchPoints();
+    window.addEventListener("balloon-encounters:points-updated", fetchPoints);
+    return () => window.removeEventListener("balloon-encounters:points-updated", fetchPoints);
+  }, [walletAddress]);
+
   const clusters = buildBalloonClusters(balloons, now).slice(0, 6);
   const selected = balloons.find((balloon) => balloon.id === selectedBalloonId) ?? balloons[0] ?? null;
+
+  const [hasInteracted, setHasInteracted] = useState(false);
+
+  useEffect(() => {
+    if (!walletAddress || !selected?.id) {
+      setHasInteracted(false);
+      return;
+    }
+    fetch(`/api/balloons/interact/status?balloonId=${selected.id}&address=${walletAddress}`)
+      .then(res => res.json())
+      .then(data => setHasInteracted(!!data.interacted))
+      .catch(() => {});
+  }, [walletAddress, selected?.id]);
   const formattedCreatedAt = selected
     ? new Date(selected.createdAt).toLocaleString("zh-CN", {
         month: "short",
@@ -52,7 +86,58 @@ export default function BalloonSidebar({
             <div className="mt-4 text-[12px] text-white/45">
               by {selected.author} · {selected.wallet.slice(0, 6)}...{selected.wallet.slice(-4)}
             </div>
-            <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-white/42">
+            <div className="mt-6 flex flex-col gap-3">
+              <div className="flex items-center justify-between rounded-2xl bg-white/5 p-3">
+                <div className="text-[11px] uppercase tracking-wider text-white/50">你的风力积分</div>
+                <div className="text-sm font-semibold text-emerald-300">{localPoints !== null ? localPoints : "--"}</div>
+              </div>
+              
+              <button
+                type="button"
+                disabled={hasInteracted}
+                onClick={async () => {
+                  if (!walletAddress) {
+                    alert("请先连接钱包");
+                    return;
+                  }
+                  if (hasInteracted) return;
+
+                  try {
+                    const res = await fetch("/api/balloons/interact", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        balloonId: selected.id,
+                        walletAddress: walletAddress,
+                        action: "click"
+                      })
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      setLocalPoints((prev) => (prev ?? 0) + (data.pointsAdded || 0));
+                      setHasInteracted(true);
+                      window.dispatchEvent(new CustomEvent("balloon-encounters:points-updated"));
+                    } else if (res.status === 403) {
+                      setHasInteracted(true);
+                      alert("你已经为此气球点过赞了");
+                    }
+                  } catch (err) {
+                    console.error("Interaction failed", err);
+                  }
+                }}
+                className={`group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl py-4 font-semibold transition active:scale-[0.98] ${
+                  hasInteracted 
+                    ? "bg-white/10 text-white/40 cursor-not-allowed" 
+                    : "bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30"
+                }`}
+              >
+                {!hasInteracted && <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/20 to-emerald-500/0 translate-x-[-100%] group-hover:animate-[shimmer_2s_infinite]" />}
+                <span className="text-xl">{hasInteracted ? "✨" : "🎈"}</span>
+                <span>{hasInteracted ? "已点亮共鸣" : "Glow +1 点亮共鸣"}</span>
+              </button>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-white/42 border-t border-white/5 pt-4">
               <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
                 {selected.source === "onchain" ? "onchain" : "demo seed"}
               </span>

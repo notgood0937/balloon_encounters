@@ -205,7 +205,11 @@ export function buildBalloonClusters(posts: BalloonPost[], timeMs: number): Ball
       const second = posts[j];
       const similarity = getBalloonSimilarity(first, second);
       const distance = approxDistance(drifted.get(first.id)!, drifted.get(second.id)!);
-      if (similarity >= 0.58 && distance <= 8.5) {
+      
+      // Gravity: High stake balloons have a larger capture radius
+      const gravityRadius = 8.5 + (first.stake + second.stake) * 0.8;
+      
+      if (similarity >= 0.58 && distance <= gravityRadius) {
         union(first.id, second.id);
       }
     }

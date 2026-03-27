@@ -205,7 +205,27 @@ function initSchema(db: Database.Database) {
       stake_token TEXT NOT NULL DEFAULT 'USDC.e',
       ai_summary TEXT,
       related_balloon_ids_json TEXT NOT NULL DEFAULT '[]',
+      current_stake REAL NOT NULL DEFAULT 0,
+      last_decay_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    CREATE TABLE IF NOT EXISTS user_points (
+      wallet_address TEXT PRIMARY KEY,
+      wind_points REAL DEFAULT 0,
+      updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    CREATE TABLE IF NOT EXISTS platform_treasury (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      total_usdt REAL DEFAULT 0,
+      updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    );
+    INSERT OR IGNORE INTO platform_treasury (id, total_usdt) VALUES (1, 0);
+    CREATE TABLE IF NOT EXISTS balloon_interactions (
+      balloon_id TEXT NOT NULL,
+      wallet_address TEXT NOT NULL,
+      action TEXT NOT NULL,
+      created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      PRIMARY KEY (balloon_id, wallet_address, action)
     );
     CREATE INDEX IF NOT EXISTS idx_balloons_created ON balloons(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_balloons_wallet ON balloons(wallet_address);
@@ -312,6 +332,8 @@ function migrate(db: Database.Database) {
     ["stake_token", "TEXT NOT NULL DEFAULT 'USDC.e'"],
     ["ai_summary", "TEXT"],
     ["related_balloon_ids_json", "TEXT NOT NULL DEFAULT '[]'"],
+    ["current_stake", "REAL DEFAULT 0"],
+    ["last_decay_at", "TEXT"],
   ];
   for (const [col, type] of balloonMigrations) {
     if (balloonCols.length > 0 && !balloonExisting.has(col)) {
