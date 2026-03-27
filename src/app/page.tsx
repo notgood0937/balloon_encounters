@@ -99,7 +99,7 @@ export default function Home() {
         setBalloons(nextBalloons);
         setSelectedBalloonId(post.id);
         setAiSummary(match.summary);
-        
+
         // Persist to localStorage
         const saved = localStorage.getItem("polyworld_demo_balloons");
         const demoBalloons = saved ? JSON.parse(saved) as BalloonPost[] : [];
@@ -197,7 +197,7 @@ export default function Home() {
                 </span>
               </div>
               <p className="mt-3 max-w-[820px] text-sm leading-6 text-white/68 sm:text-[15px]">
-                删除预测市场面板后，首页只保留两条主线：钱包身份和全球地图。每个用户都能把心情、故事、理想或 DeFi 合作信号放进一个带 1-5 USDT stake 的气球里，让 AI 根据标签与语义把相似的人慢慢聚到一起。
+                每个用户都能把心情、故事、理想或 DeFi 合作信号放进一个带 1-5 USDT stake 的气球里，让 AI 根据标签与语义把相似的人慢慢聚到一起。
               </p>
             </div>
 
