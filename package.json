@@ -1,0 +1,58 @@
+{
+  "name": "balloon-encounters",
+  "version": "0.1.0",
+  "description": "Interactive balloon social map and prediction dashboard",
+  "author": "fan",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AmazingAng/BalloonEncounters.git"
+  },
+  "scripts": {
+    "dev": "WATCHPACK_POLLING=true next dev --webpack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@polymarket/builder-relayer-client": "^0.0.8",
+    "@polymarket/builder-signing-sdk": "^1.0.0",
+    "@polymarket/clob-client": "^5.8.0",
+    "@tanstack/react-query": "^5.90.21",
+    "@types/mdx": "^2.0.13",
+    "better-sqlite3": "^12.6.2",
+    "ethers": "^6.16.0",
+    "fumadocs-core": "^16.6.17",
+    "fumadocs-mdx": "^14.2.10",
+    "fumadocs-ui": "^16.6.17",
+    "hls.js": "^1.6.15",
+    "lightweight-charts": "^5.1.0",
+    "maplibre-gl": "^4.7.1",
+    "next": "16.1.6",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "rss-parser": "^3.13.0",
+    "viem": "^2.47.4",
+    "wagmi": "^3.5.0",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "playwright": "^1.58.2",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^4.0.18"
+  }
+}

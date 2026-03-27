@@ -1,0 +1,15 @@
+{$DOMAIN:balloon-encounters.app} {
+	reverse_proxy balloon-encounters:3000
+
+	encode gzip zstd
+
+	header {
+		# Security
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		# Cache static assets
+		@static path /_next/static/* /icon.svg /favicon.ico
+		header @static Cache-Control "public, max-age=31536000, immutable"
+	}
+}
